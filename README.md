@@ -240,6 +240,39 @@ Stops the web server, go2rtc, and any decrypt-relay/ffmpeg processes it started.
 The frontend is plain JavaScript with no build step, so a UI change just needs a browser refresh; only a
 backend (Python) change needs `./stop.sh && ./run.sh`.
 
+### Run on a Linux VM with Docker
+
+Tested target: Ubuntu on amd64 with Docker Engine and the Compose plugin. The image is multi-arch
+(amd64/arm64) and bundles Python, ffmpeg and go2rtc. The [AI frame enhancer](#ai-frame-enhancer) is not
+included. The VM must be able to reach the recorder's IP directly (same LAN or routed).
+
+```sh
+git clone https://github.com/aweher/sentinel-eye.git && cd sentinel-eye
+mkdir -p data && sudo chown 1000:1000 data     # the container runs as UID 1000
+docker compose up -d --build
+```
+
+Then open `http://<vm-ip>:8007` and enter the recorder in **Settings**. The container uses host
+networking, so on your LAN/VPN live view gets WebRTC exactly like a native install.
+
+- **Seeding from `.env` instead:** uncomment the `./.env:/app/.env:ro` line in `compose.yaml` before the
+  first start. It is read only when `data/settings.json` doesn't exist yet, so remove the line afterwards.
+- **Moving an existing install:** stop the old one, copy its whole `data/` directory to the VM, and
+  `sudo chown -R 1000:1000 data`. Keeping `export_signing_key.pem` keeps earlier exports verifiable.
+- **Settings via environment** (exported in the shell before `docker compose up`, or edited in
+  `compose.yaml`): `SENTINEL_HOST` (default `0.0.0.0`; set it to a VPN address to listen only there),
+  `SENTINEL_PORT` (default `8007`), `TZ` (log timestamps only, since the app takes its time zone from the
+  recorder), `SENTINEL_DATA_DIR` (host path, default `./data`).
+- **Logs:** `docker compose logs -f` (server), `data/go2rtc.log` (go2rtc).
+- **Update:** `git pull && docker compose up -d --build`. **Stop:** `docker compose down`.
+- **Tests:** `tools/test_docker_image.sh` and `tools/test_docker_compose.sh`.
+
+**Reaching it from the internet:** there is still no login, so never publish port 8007 directly. Put it
+behind a reverse proxy or tunnel that **authenticates every request** (for example Cloudflare Access,
+oauth2-proxy, or your proxy's own auth), and make sure it passes WebSocket upgrades for `/ws` and
+`/api/playback/ws`. Through an HTTP-only tunnel WebRTC can't connect, and the player falls back to MSE over
+that WebSocket automatically (slightly more latency, same picture).
+
 ## Installing as an app
 
 Sentinel Eye installs as a standalone app on iPhone, iPad, and Mac — no App Store, just the browser's own
