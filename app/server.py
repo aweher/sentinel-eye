@@ -451,11 +451,27 @@ async def timeline_tz():
 #   bytes 9+    : Annex-B NAL bytes (start code included), fed straight into WebCodecs VideoDecoder
 # Control messages from the browser are JSON text: {"type":"seek","t":"<iso>"} or {"type":"speed","scale":"2"}.
 
+REPLAY_WINDOW_S = 120   # a viewer may play back this far: the live view's instant replay (last 10 s), not review
+
+
+def _within_replay_window(t: str) -> bool:
+    import datetime
+    try:
+        at = datetime.datetime.fromisoformat(t.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return False
+    if at.tzinfo is None:
+        return False
+    age = (datetime.datetime.now(datetime.timezone.utc) - at).total_seconds()
+    return -30 <= age <= REPLAY_WINDOW_S
+
+
 @app.websocket("/api/playback/ws")
 async def playback_ws(ws: WebSocket, channel: str, start: str, speed: str = "1"):
-    p = await _ws_admit(ws, "operator")
+    p = await _ws_admit(ws, "viewer" if _within_replay_window(start) else "operator")
     if p is None:
         return
+    review = p.can("operator")
     origin = ws.headers.get("origin")
     if origin and urlparse(origin).netloc != ws.headers.get("host"):
         await ws.close(code=1008)
@@ -490,7 +506,8 @@ async def playback_ws(ws: WebSocket, channel: str, start: str, speed: str = "1")
                     except ValueError:
                         continue
                     if msg.get("type") == "seek":
-                        reader.seek(msg["t"], msg.get("scale"))
+                        if review or _within_replay_window(msg.get("t", "")):
+                            reader.seek(msg["t"], msg.get("scale"))
                     elif msg.get("type") == "speed":
                         reader.set_speed(msg["scale"])
 

@@ -6,7 +6,7 @@ import { bookmarkDialog, esc, icon, toast, openPopover } from './ui.js';
 import { WCPlayer, unsupportedReason } from './wcplayer.js';
 import { partsFromEpoch, fetchTzOffset } from './dvrtime.js';
 import { DateTimePicker } from './datepicker.js';
-import { api } from './api.js';
+import { api, getJSON } from './api.js';
 import { Enhancer, PRESETS as ENHANCE_PRESETS } from './enhance.js';
 import { enhancePanelHTML, wireEnhancePanel, summarizeEnhParams } from './enhancePanel.js';
 import { ZoomPan } from './zoom.js';
@@ -792,7 +792,7 @@ export class PlaybackView {
     if (this._poolTimer) return;
     const tick = async () => {
       try {
-        const r = await fetch('/api/playback/pool').then((x) => x.json());
+        const r = await getJSON('/api/playback/pool');
         // "recorder sessions" in its own span, CSS-hidden below the width it stops fitting — same
         // shorten-instead-of-wrap treatment as .nav/.brand's own secondary text, and the direct fix for a
         // real bug: this .pill has no min-width, so at exactly the widths where the topline is tightest

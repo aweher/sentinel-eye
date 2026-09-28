@@ -165,6 +165,12 @@ def role_matrix():
     check("viewer settings: no recorder details", set(s["connection"]) == {"channel_zero", "configured"}, s["connection"])
     check("viewer /ws allowed", ws_close_code(clients["viewer"], "/ws?src=cam1", wait=0.2) is None)
     check("viewer playback WS -> 4403", ws_close_code(clients["viewer"], "/api/playback/ws?channel=c1&start=x") == 4403)
+    import datetime
+    ago = lambda s: (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=s)).isoformat().replace("+00:00", "Z")
+    check("viewer instant replay (10 s ago) admitted",
+          ws_close_code(clients["viewer"], f"/api/playback/ws?channel=nope&start={ago(10)}") == 4404)
+    check("viewer playback 10 min ago -> 4403",
+          ws_close_code(clients["viewer"], f"/api/playback/ws?channel=nope&start={ago(600)}") == 4403)
     check("operator playback WS admitted (closes later for other reasons)",
           ws_close_code(clients["operator"], "/api/playback/ws?channel=nope&start=x") == 4404)
     r = clients["operator"].post("/api/bookmarks", json={"channels": ["c1"], "time_utc": "2026-09-28T10:00:00+00:00"})
