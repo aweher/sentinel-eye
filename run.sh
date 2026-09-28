@@ -29,7 +29,7 @@ Commands:
   status     Show whether it is running and healthy
   logs       Follow the server log (extra args go to 'docker compose logs', e.g. --tail 50)
   update     git pull, rebuild / reinstall dependencies, restart if it was running
-  backup     Write data/ (settings, credentials, signing key, playback index) to backups/*.tar.gz
+  backup     Write data/ (settings, credentials, accounts, signing key, playback index) to backups/*.tar.gz
   shell      Docker only: open a shell inside the running container
   clean      Remove what setup built (docker: container + image; native: .venv, bin/go2rtc). Keeps data/.
 

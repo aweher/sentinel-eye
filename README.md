@@ -143,6 +143,8 @@ each camera directly. A few key files:
 | `app/playback_session.py`, `app/timebase.py` | DVR playback sessions and the RTP-to-UTC clock calibration that makes multi-camera playback frame-locked |
 | `app/export.py` | Stream-copy export, manifest generation, Ed25519 signing |
 | `app/enhance_ai.py` | The local Real-ESRGAN/GFPGAN frame enhancer |
+| `app/auth.py`, `app/auth_api.py` | Optional sign-in: accounts, roles, TOTP, sessions, TV pairing, and the per-route role checks |
+| `app/hwaccel.py` | Picks the H.264 encoder for the live transcode (NVENC, VA-API, V4L2, VideoToolbox, or CPU) |
 | `web/` | Plain ES modules, no build step, no framework |
 
 SD streams stay connected at all times (needed for event/coverage indexing); HD streams start only when
@@ -167,7 +169,7 @@ browser — playing the original H.265 directly is an opt-in setting for lower C
 ./run.sh stop            # ./stop.sh does the same
 ./run.sh restart
 ./run.sh update          # git pull, rebuild / reinstall dependencies, restart if it was running
-./run.sh backup          # data/ (settings, credentials, signing key, playback index) to backups/*.tar.gz
+./run.sh backup          # data/ (settings, credentials, accounts, signing key, playback index) to backups/*.tar.gz
 ./run.sh setup           # just the preparation step of start
 ./run.sh shell           # Docker only: a shell inside the container
 ./run.sh clean           # remove the container + image (native: .venv and bin/go2rtc); data/ is kept
@@ -272,7 +274,7 @@ Tested target: Ubuntu on amd64 with Docker Engine and the Compose plugin. The im
 included. The VM must be able to reach the recorder's IP directly (same LAN or routed).
 
 ```sh
-git clone https://github.com/aweher/sentinel-eye.git && cd sentinel-eye
+git clone https://github.com/dsameendra/sentinel-eye.git && cd sentinel-eye
 ./run.sh    # builds the image, gives data/ to UID 1000 (asks for sudo once), starts, waits until healthy
 ```
 
@@ -419,7 +421,8 @@ anything on it. Sign-in has its own suites, no recorder needed:
 ## Project status
 
 Live viewing, multi-camera DVR playback with frame-locked timing, event search, signed-package export, the
-real-time enhancement filters, and the local AI frame enhancer are all built and in day-to-day use. The
+real-time enhancement filters, and the local AI frame enhancer are all built and in day-to-day use, along
+with a Docker deployment for Linux hosts (with GPU transcoding when available) and optional sign-in. The
 detailed specification and its build status live in `docs/SPEC.md` — including the parts
 deliberately not built (a native-DVR-file export option, and a standalone offline player), and one open
 investigation into a rare timing edge case on footage recorded many hours before the most recent per-channel

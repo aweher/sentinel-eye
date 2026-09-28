@@ -18,6 +18,9 @@ secrets*.json
 *.sqlite-*
 captures/
 exports/
+# Stray clips anywhere in the tree (camera footage).
+*.mp4
+*.mkv
 recordings/
 snapshots/
 thumbnails/
