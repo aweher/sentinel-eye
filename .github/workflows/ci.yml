@@ -1,0 +1,32 @@
+name: CI
+
+# Deliberately lightweight: syntax-only checks for the Python backend and the plain-JS frontend, no
+# dependency install (the AI enhancer's PyTorch/basicsr stack alone makes a full install too slow and
+# flaky for a required check) and no real DVR to test playback/decrypt against in CI. This still catches a
+# real, previously-shipped class of bug directly: a broken file that fails to even parse.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax-check:
+    name: Syntax check (Python + JS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Python syntax check (app/, tools/)
+        run: find app tools -name '*.py' -print -exec python -m py_compile {} +
+
+      - name: JS syntax check (web/)
+        run: find web -name '*.js' -print0 | xargs -0 -n1 node --check
