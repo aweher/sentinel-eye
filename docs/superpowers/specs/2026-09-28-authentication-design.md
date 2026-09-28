@@ -1,6 +1,6 @@
 # Optional authentication — design
 
-Date: 2026-09-28 · Status: brainstormed in conversation, pending written-spec review
+Date: 2026-09-28 · Status: implemented (see "Implementation notes" at the end)
 
 ## Goal
 
@@ -166,3 +166,16 @@ Authorization is enforced server-side per route; the frontend only hides what th
 
 - Per-camera permissions, external identity providers (OIDC/SAML), WebAuthn/passkeys, email-based
   password reset. OIDC-style SSO remains available by putting an authenticating proxy in front.
+
+## Implementation notes
+
+Where the build differs from the text above:
+
+- The HTTP side lives in `app/auth_api.py` (principal, route→role table, cookie, `/api/auth/*`); `server.py`
+  only wires it in. Sign-in pages are `/login` and `/pair`.
+- CSRF: a non-GET request is refused only when its `Origin`/`Referer` names another host. A request with
+  neither is a non-browser client (the `tools/` scripts), since browsers always send `Origin` cross-site.
+- Instant replay for viewers: `/api/playback/ws` admits a viewer when `start` is within the last 2 minutes,
+  and ignores that viewer's seeks further back. Everything else on that socket still needs operator.
+- A viewer's `GET /api/settings` returns `connection: {channel_zero, configured}`.
+- `SENTINEL_ADMIN_USER` / `SENTINEL_ADMIN_PASSWORD` are always passed through `compose.yaml` (empty = no-op).

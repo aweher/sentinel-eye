@@ -24,8 +24,9 @@ exists to replace them outright: everything the vendor's software does — live 
 motion/event review, clip export, and increasingly AI-assisted analysis — running entirely on hardware you
 control, with the recorder's proprietary encryption decrypted locally instead of trusted to a vendor plugin.
 
-Built for my own needs, not as a multi-user product: there's no login system, and it's meant to run on
-`127.0.0.1` or a network you already trust, not to be exposed publicly.
+Built for my own needs first. Out of the box there's no login and it's meant for `127.0.0.1` or a network
+you already trust; [sign-in](#sign-in-optional) is one form away when other people, a TV, or a tunnel get
+involved.
 
 ## Features
 
@@ -94,7 +95,8 @@ distinction between "what the sensor recorded" and "the AI's best reconstruction
 ### Settings
 Recorder address and login, the encryption toggle and verification code, per-channel names/order/frame-rate
 overrides and custom RTSP paths, a "detect channels" scan (also reads the recorder's own camera names),
-theme and layout defaults, and live connection/engine status.
+theme and layout defaults, and live connection/engine status. With [sign-in](#sign-in-optional) on,
+Security holds accounts, paired TVs, sessions, network access and an activity log.
 
 ### Keyboard shortcuts
 
@@ -216,8 +218,8 @@ it's unavailable.
 
 ### Listen address and port
 
-Opens on **http://127.0.0.1:8007**. There is no login, so keep this on `127.0.0.1` or a network you trust —
-do not expose it to the public internet. Set `SENTINEL_HOST`/`SENTINEL_PORT` to change the listen address
+Opens on **http://127.0.0.1:8007**. Until you turn on [sign-in](#sign-in-optional) there is no login, so
+keep it on `127.0.0.1` or a network you trust. Set `SENTINEL_HOST`/`SENTINEL_PORT` to change the listen address
 (default `0.0.0.0`, all interfaces), in either mode:
 
 ```sh
@@ -229,11 +231,10 @@ SENTINEL_HOST=127.0.0.1 SENTINEL_PORT=8090 ./run.sh restart
 With the default `SENTINEL_HOST=0.0.0.0`, on your phone (connected to the **same Wi-Fi**) browse to
 `http://<this-machine's-LAN-IP>:8007` — find the IP with `ipconfig getifaddr en0` (Wi-Fi) on a Mac.
 
-Because there is still no login, this makes the dashboard — and your camera feeds — reachable by **anything
-else on that network**, not just your phone: other devices on the same Wi-Fi, a guest network if it shares
-the same subnet, or anyone who has the Wi-Fi password. Only do this on a Wi-Fi network you actually trust,
-the same way you'd trust it with any other unauthenticated home device. Do not port-forward this to the
-public internet.
+Without [sign-in](#sign-in-optional), this makes the dashboard — and your camera feeds — reachable by
+**anything else on that network**, not just your phone: other devices on the same Wi-Fi, a guest network if
+it shares the same subnet, or anyone who has the Wi-Fi password. Only leave it open on a Wi-Fi network you
+actually trust; otherwise turn sign-in on first.
 
 The frontend is plain JavaScript with no build step. Natively a UI change just needs a browser refresh and a
 backend (Python) change needs `./run.sh --native restart`; in Docker both need `./run.sh update` (the code is
@@ -291,18 +292,64 @@ from your computer, `ssh -N -L 8007:127.0.0.1:8007 <vm>`, and open `http://local
 - **Settings via environment** (exported in the shell before `./run.sh start`, or edited in
   `compose.yaml`): `SENTINEL_HOST` (default `0.0.0.0`; set it to a VPN address to listen only there),
   `SENTINEL_PORT` (default `8007`), `TZ` (log timestamps only, since the app takes its time zone from the
-  recorder), `SENTINEL_DATA_DIR` (host path, default `./data`).
+  recorder), `SENTINEL_DATA_DIR` (host path, default `./data`), `SENTINEL_ADMIN_USER` /
+  `SENTINEL_ADMIN_PASSWORD` (turn [sign-in](#sign-in-optional) on at first start).
 - **Logs:** `./run.sh logs` (server), `data/go2rtc.log` (go2rtc).
 - **Update:** `./run.sh update`. **Stop:** `./run.sh stop`. Plain `docker compose` works too; `run.sh`
   only wraps it.
-- **Tests:** `tools/test_docker_image.sh`, `tools/test_docker_compose.sh`, and
-  `.venv/bin/python3 tools/test_hwaccel.py` (encoder selection, no GPU needed).
+- **Tests:** `tools/test_docker_image.sh`, `tools/test_docker_compose.sh`,
+  `.venv/bin/python3 tools/test_hwaccel.py` (encoder selection, no GPU needed), and the sign-in suites
+  (see [Testing](#testing)).
 
-**Reaching it from the internet:** there is still no login, so never publish port 8007 directly. Put it
-behind a reverse proxy or tunnel that **authenticates every request** (for example Cloudflare Access,
-oauth2-proxy, or your proxy's own auth), and make sure it passes WebSocket upgrades for `/ws` and
-`/api/playback/ws`. Through an HTTP-only tunnel WebRTC can't connect, and the player falls back to MSE over
-that WebSocket automatically (slightly more latency, same picture).
+**Reaching it from the internet:** turn [sign-in](#sign-in-optional) on first (ideally with two-factor
+for admins), and never publish port 8007 directly: put it behind a reverse proxy or tunnel that terminates
+HTTPS and passes WebSocket upgrades for `/ws` and `/api/playback/ws`. If you'd rather have single sign-on,
+the proxy can authenticate too (Cloudflare Access, oauth2-proxy, …) in front of or instead of the built-in
+sign-in. Through an HTTP-only tunnel WebRTC can't connect, and the player falls back to MSE over that
+WebSocket automatically (slightly more latency, same picture).
+
+## Sign-in (optional)
+
+Off by default: with no accounts, everyone who can reach the address is effectively an admin, exactly as
+before. It turns on the moment the first account exists, either from **Settings → Security → Turn on
+sign-in**, or at start-up with `SENTINEL_ADMIN_PASSWORD` (and optionally `SENTINEL_ADMIN_USER`, default
+`admin`) in the environment — used only while there are no accounts, so leaving it set never overwrites a
+password changed later.
+
+| | Viewer | Operator | Admin |
+|---|:-:|:-:|:-:|
+| Live view, snapshots, zoom, instant replay | ✅ | ✅ | ✅ |
+| Playback, event search, bookmarks, exports, frame enhancer | | ✅ | ✅ |
+| Shared layout and camera order | | ✅ | ✅ |
+| Recorder connection, channels, all settings, accounts | | | ✅ |
+
+The server enforces this on every request and WebSocket; the interface just hides what you can't use. A
+viewer's copy of the settings doesn't include the recorder's address or login.
+
+- **Two-factor authentication:** each person can turn it on from the account menu (any authenticator app),
+  with ten single-use recovery codes. **Require two-factor for admins** makes it mandatory for them.
+- **TVs and shared screens:** on the TV, open the address and pick **Pair this device** (TV-mode browsers go
+  straight there). It shows a code and a QR; an admin scans it or opens `/pair` on their phone, names the
+  device and chooses Viewer or Operator. No password is typed on the TV, and it stays signed in for a year
+  of use. Removing it in Settings → Security cuts its streams right away.
+- **Sessions:** "Keep me signed in" lasts 30 days of use, otherwise 12 hours (both adjustable). Everyone can
+  see and sign out their own devices; admins see all of them. Changing a password signs out your other
+  devices.
+- **Trusted networks:** optionally let a LAN (e.g. `192.168.1.0/24`) in without signing in, as Viewer or
+  Operator, never Admin. Requests that came through a proxy or tunnel always sign in, even from a listed
+  address: a tunnel running on the same machine makes internet traffic arrive from `127.0.0.1`, which is why
+  that address is only trusted if you list it, and Security warns when you do.
+- **Reverse proxies:** list their addresses under *Reverse proxies* so the activity log shows real client
+  addresses and cookies get the `Secure` flag behind HTTPS.
+- **Locked out?** On the server (inside Docker: `./run.sh shell`, or `docker compose exec sentinel-eye …`):
+
+  ```sh
+  python app/auth.py reset-password admin     # also: list-users, disable-2fa <user>,
+                                              #       revoke-sessions <user>, disable-auth
+  ```
+
+Accounts, sessions and the activity log live in `data/auth.db` (passwords as scrypt hashes, session tokens
+only as hashes); `./run.sh backup` includes it.
 
 ## Installing as an app
 
@@ -350,6 +397,9 @@ handles paging and exiting.
 Results on an actual TV browser vary with its hardware and how current the browser is — treat any given
 smart TV as something to test, not a guaranteed target.
 
+With [sign-in](#sign-in-optional) on, a TV-mode browser opens on a pairing code instead of a password form:
+approve it from your phone and the TV stays signed in on its own.
+
 ## Testing
 
 ```sh
@@ -358,7 +408,13 @@ python tools/e2e_ui.py http://127.0.0.1:8081 <shotdir>   # ~40 browser checks vi
 ```
 
 `tools/e2e_live.py` and `tools/e2e_real_settings.py` check against your real recorder without changing
-anything on it.
+anything on it. Sign-in has its own suites, no recorder needed:
+
+```sh
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python3 tools/test_auth_core.py    # accounts, 2FA, sessions, pairing, trusted networks, CLI
+.venv/bin/python3 tools/test_auth_http.py    # every route and WebSocket per role, login flows
+```
 
 ## Project status
 

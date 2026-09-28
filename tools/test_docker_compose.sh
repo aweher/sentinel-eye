@@ -85,4 +85,18 @@ else
   echo "(skipped: bind-mount ownership isn't enforced by Docker Desktop on $(uname))"
 fi
 
+echo "== 6. SENTINEL_ADMIN_PASSWORD: sign-in on, healthcheck still passes, status says nothing more =="
+prep_data 1000:1000 ""
+SENTINEL_ADMIN_PASSWORD="compose test password" docker compose up -d
+wait_healthy
+[ "$(curl -s -o /dev/null -w '%{http_code}' "$(base)/api/settings")" = 401 ] || fail "settings reachable without signing in"
+curl -fsS "$(base)/api/status" | python3 -c 'import json,sys; s=json.load(sys.stdin); assert list(s) == ["go2rtc"], s' \
+  || fail "unauthenticated /api/status says more than go2rtc"
+jar="$SCRATCH/cookies"
+curl -fsS -c "$jar" -H 'Content-Type: application/json' -d '{"username":"admin","password":"compose test password"}' \
+  "$(base)/api/auth/login" >/dev/null || fail "admin from SENTINEL_ADMIN_PASSWORD can't sign in"
+curl -fsS -b "$jar" "$(base)/api/settings" >/dev/null || fail "signed-in admin can't read settings"
+[ "$(docker compose exec -T sentinel-eye stat -c %a /data/auth.db)" = 600 ] || fail "auth.db is not mode 600"
+docker compose down -t 15
+
 echo "PASS"
