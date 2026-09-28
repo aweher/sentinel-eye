@@ -35,3 +35,6 @@ __pycache__/
 /gfpgan/
 # impeccable's per-session edit-tracking cache — local, keyed by session id, not shared project state.
 .impeccable/hook.cache.json
+
+# ./run.sh backup output (contains credentials).
+backups/

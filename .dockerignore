@@ -8,3 +8,4 @@ docs/
 tools/
 **/__pycache__/
 *.pyc
+backups/

@@ -150,30 +150,41 @@ browser — playing the original H.265 directly is an opt-in setting for lower C
 ## Running it
 
 ### Requirements
-- macOS (Apple Silicon or Intel) with [Homebrew](https://brew.sh)
-- Python 3
+- **Docker** (the default): Docker Engine with the Compose plugin on Linux, or Docker Desktop on macOS with
+  host networking enabled (Settings > Resources > Network). The image bundles Python, ffmpeg and go2rtc.
+- **Or native** (`--native`): Python 3 and ffmpeg (`brew install ffmpeg` on macOS). Built and tested on
+  macOS; native Linux (x86_64/arm64) is supported by `run.sh` but hasn't been verified yet.
 - A Hikvision DVR/NVR or camera reachable over RTSP on your network
 
-Only built and tested on macOS so far — that's the machine this was written for. The Python backend and
-`go2rtc` are both cross-platform in principle, so Linux/Windows support is realistic, but `run.sh`,
-Homebrew, and the go2rtc binary fetch are all Mac-specific today and nothing else has been verified. See
-[Contributing](#contributing) below if you'd like to help change that.
-
-### Install
+### `run.sh`: the whole lifecycle
 
 ```sh
-brew install ffmpeg
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+./run.sh                 # = ./run.sh start: build/prepare if needed, start in the background, wait until healthy
+./run.sh status          # running? healthy?
+./run.sh logs            # follow the server log (go2rtc's is data/go2rtc.log)
+./run.sh stop            # ./stop.sh does the same
+./run.sh restart
+./run.sh update          # git pull, rebuild / reinstall dependencies, restart if it was running
+./run.sh backup          # data/ (settings, credentials, signing key, playback index) to backups/*.tar.gz
+./run.sh setup           # just the preparation step of start
+./run.sh shell           # Docker only: a shell inside the container
+./run.sh clean           # remove the container + image (native: .venv and bin/go2rtc); data/ is kept
+./run.sh help
 ```
 
-That's it — `./run.sh` (below) fetches the right [go2rtc](https://github.com/AlexxIT/go2rtc) media-server
-binary for your Mac's CPU (Apple Silicon or Intel) into `bin/go2rtc` the first time it runs, since that
-binary is arch-specific and isn't committed to the repo.
+Every command runs in Docker unless you add `--native` (or export `SENTINEL_MODE=native`), which runs the
+server straight from a `.venv` on this machine instead: `./run.sh --native start`. Native `setup` creates
+`.venv`, installs `requirements.txt` and fetches the right [go2rtc](https://github.com/AlexxIT/go2rtc) binary
+for your OS and CPU into `bin/go2rtc`; `./run.sh --native run` runs it in the foreground (Ctrl-C stops it),
+logging to the terminal instead of `data/sentinel.log`. `stop`, `status` and `logs` pick native on their own
+when a native instance is running. Only one of the two can run at a time, since they share ports.
+
+`backup` archives contain the DVR password; `backups/` is git-ignored and created with owner-only access.
 
 ### Configure
 
 The first time you start it, Sentinel Eye seeds `data/settings.json` from a `.env` file in the project root,
-if one exists:
+if one exists (`run.sh` also passes it into the container on that first Docker start):
 
 ```sh
 DVR_HOST=192.0.2.10
@@ -186,42 +197,37 @@ DVR_KEY=your-stream-encryption-verification-code   # only needed if Stream Encry
 channels, display options) is edited from the in-app **Settings** screen. `data/` holds your credentials
 (file mode 600) and is git-ignored; never commit it.
 
-### AI frame enhancer (optional)
+### AI frame enhancer (optional, native only)
 
 Everything above is all you need for live view, playback, export, and the real-time "wand" filters. The
 [AI frame enhancer](#ai-frame-enhancer) (Real-ESRGAN + GFPGAN, plus optional OCR) is a separate, heavier
 opt-in — it pulls in PyTorch and ~1.5 GB of model weights, and one of its dependencies
 ([basicsr](https://github.com/XPixelGroup/BasicSR), effectively unmaintained since 2022) needs a couple of
-small local patches to install and run on current Python. All of that is scripted:
+small local patches to install and run on current Python. It isn't in the Docker image. All of that is
+scripted:
 
 ```sh
+./run.sh --native setup
 tools/install_enhance_deps.sh
 ```
 
-Run it once, any time after the base install above. If you skip this, everything else works normally; only
-the frame-enhancer button will report it's unavailable.
+Run it once. If you skip this, everything else works normally; only the frame-enhancer button will report
+it's unavailable.
 
-### Run
-
-```sh
-./run.sh
-```
+### Listen address and port
 
 Opens on **http://127.0.0.1:8007**. There is no login, so keep this on `127.0.0.1` or a network you trust —
-do not expose it to the public internet. Set `SENTINEL_HOST`/`SENTINEL_PORT` to change the listen address:
+do not expose it to the public internet. Set `SENTINEL_HOST`/`SENTINEL_PORT` to change the listen address
+(default `0.0.0.0`, all interfaces), in either mode:
 
 ```sh
-SENTINEL_PORT=8090 ./run.sh
+SENTINEL_HOST=127.0.0.1 SENTINEL_PORT=8090 ./run.sh restart
 ```
 
 ### Watching from your phone (or another device on your network)
 
-```sh
-SENTINEL_HOST=0.0.0.0 ./run.sh
-```
-
-Then, on your phone (connected to the **same Wi-Fi**), browse to `http://<this-machine's-LAN-IP>:8007` — find
-the IP with `ipconfig getifaddr en0` (Wi-Fi) on the Mac.
+With the default `SENTINEL_HOST=0.0.0.0`, on your phone (connected to the **same Wi-Fi**) browse to
+`http://<this-machine's-LAN-IP>:8007` — find the IP with `ipconfig getifaddr en0` (Wi-Fi) on a Mac.
 
 Because there is still no login, this makes the dashboard — and your camera feeds — reachable by **anything
 else on that network**, not just your phone: other devices on the same Wi-Fi, a guest network if it shares
@@ -229,16 +235,9 @@ the same subnet, or anyone who has the Wi-Fi password. Only do this on a Wi-Fi n
 the same way you'd trust it with any other unauthenticated home device. Do not port-forward this to the
 public internet.
 
-### Stop
-
-```sh
-./stop.sh
-```
-
-Stops the web server, go2rtc, and any decrypt-relay/ffmpeg processes it started.
-
-The frontend is plain JavaScript with no build step, so a UI change just needs a browser refresh; only a
-backend (Python) change needs `./stop.sh && ./run.sh`.
+The frontend is plain JavaScript with no build step. Natively a UI change just needs a browser refresh and a
+backend (Python) change needs `./run.sh --native restart`; in Docker both need `./run.sh update` (the code is
+baked into the image).
 
 ### Run on a Linux VM with Docker
 
@@ -248,8 +247,7 @@ included. The VM must be able to reach the recorder's IP directly (same LAN or r
 
 ```sh
 git clone https://github.com/aweher/sentinel-eye.git && cd sentinel-eye
-mkdir -p data && sudo chown -R 1000:1000 data  # the container runs as UID 1000
-docker compose up -d --build
+./run.sh    # builds the image, gives data/ to UID 1000 (asks for sudo once), starts, waits until healthy
 ```
 
 Then open `http://<vm-ip>:8007` and enter the recorder in **Settings**. The container uses host
@@ -260,16 +258,18 @@ instant replay decode with, on a secure origin. On plain `http://<vm-ip>:8007` l
 recordings don't. Either put it behind HTTPS (see *Reaching it from the internet* below), or use an SSH tunnel
 from your computer, `ssh -N -L 8007:127.0.0.1:8007 <vm>`, and open `http://localhost:8007`.
 
-- **Seeding from `.env` instead:** uncomment the `./.env:/app/.env:ro` line in `compose.yaml` before the
-  first start. It is read only when `data/settings.json` doesn't exist yet, so remove the line afterwards.
+- **Seeding from `.env` instead:** create `.env` before the first `./run.sh` (see *Configure*). With plain
+  `docker compose`, uncomment the `./.env:/app/.env:ro` line in `compose.yaml` for the first start instead,
+  and remove it afterwards.
 - **Moving an existing install:** stop the old one, copy its whole `data/` directory to the VM, and
   `sudo chown -R 1000:1000 data`. Keeping `export_signing_key.pem` keeps earlier exports verifiable.
-- **Settings via environment** (exported in the shell before `docker compose up`, or edited in
+- **Settings via environment** (exported in the shell before `./run.sh start`, or edited in
   `compose.yaml`): `SENTINEL_HOST` (default `0.0.0.0`; set it to a VPN address to listen only there),
   `SENTINEL_PORT` (default `8007`), `TZ` (log timestamps only, since the app takes its time zone from the
   recorder), `SENTINEL_DATA_DIR` (host path, default `./data`).
-- **Logs:** `docker compose logs -f` (server), `data/go2rtc.log` (go2rtc).
-- **Update:** `git pull && docker compose up -d --build`. **Stop:** `docker compose down`.
+- **Logs:** `./run.sh logs` (server), `data/go2rtc.log` (go2rtc).
+- **Update:** `./run.sh update`. **Stop:** `./run.sh stop`. Plain `docker compose` works too; `run.sh`
+  only wraps it.
 - **Tests:** `tools/test_docker_image.sh` and `tools/test_docker_compose.sh`.
 
 **Reaching it from the internet:** there is still no login, so never publish port 8007 directly. Put it
@@ -353,9 +353,8 @@ above already admits are untested or missing:
   the encryption support (`tools/NOTES.md`) is specific to Hikvision's own scheme. A Dahua, Reolink,
   ONVIF-generic, or other vendor's equivalent would be a real, separate effort — genuinely useful, and not
   something this project currently attempts.
-- **Windows and Linux support.** The Python backend and `go2rtc` don't inherently need macOS, but `run.sh`,
-  the Homebrew-based install, and the go2rtc binary fetch all currently assume it, and nothing has been run
-  or tested on another OS.
+- **Windows and native Linux support.** Linux runs in Docker today, and `./run.sh --native` knows how to set
+  up on Linux, but a native Linux install hasn't been verified yet, and Windows hasn't been attempted.
 - **Features.** `docs/SPEC.md` documents what's built, what was deliberately left out, and why — a good
   starting point for seeing what's already been considered and what's genuinely open.
 
