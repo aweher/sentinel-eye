@@ -720,7 +720,6 @@ class RateLimiter:
 
 
 login_limiter = RateLimiter()
-pair_limiter = RateLimiter()
 
 
 # ------------------------------------------------------------------ client IP, proxies, bypass

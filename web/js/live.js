@@ -95,7 +95,7 @@ export class LiveView {
   build() {
     this.disposeTiles();
     const s = this.s;
-    if (!s.connection.host) {
+    if (!s.connection.host && !s.connection.configured) {   // configured: the redacted form non-admins get
       this.root.innerHTML = `<main class="liveview"><div class="center-card"><div class="cc-icon">${icon('plug')}</div>
         <h2>Connect your recorder</h2><p>Enter the IP address and login of your DVR or camera to see the live video.</p>
         <a class="btn primary" href="#/settings/connection">Open settings</a></div></main>`;
