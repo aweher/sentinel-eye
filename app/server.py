@@ -16,6 +16,7 @@ import db
 import enhance_ai
 import export as exportmod
 import hikrelay
+import hwaccel
 import playback_session as psess
 import settings as cfg
 import thumbnails
@@ -32,6 +33,8 @@ def current() -> cfg.Settings:
 
 @asynccontextmanager
 async def lifespan(app):
+    engine, device = await run_in_threadpool(hwaccel.current)   # before go2rtc: its config and relays use it
+    print(f"hwaccel: H.264 encoder = {engine}" + (f" ({device})" if device else ""), flush=True)
     g = Go2rtc(current)
     state["go2rtc"] = g
     await run_in_threadpool(g.start)
@@ -126,6 +129,7 @@ async def status():
     streams = await run_in_threadpool(g.status)
     p = state["playback"]
     return {"go2rtc": bool(streams) or await run_in_threadpool(g.up), "streams": streams,
+            "hwaccel": hwaccel.current()[0],
             "playback": {**p.status, "alertstream_connected": p.subscriber.connected if p.subscriber else False,
                          "last_live_event_utc": p.subscriber.last_event_utc if p.subscriber else None}}
 

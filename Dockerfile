@@ -15,9 +15,14 @@ RUN apk add --no-cache curl \
  && chmod 755 /go2rtc
 
 FROM python:3.14-slim
-# ffmpeg/ffprobe: hikrelay, thumbnails, exports, timebase; libx264 is the H.265->H.264 encoder off macOS.
+ARG TARGETARCH
+# ffmpeg/ffprobe: hikrelay, thumbnails, exports, timebase. The H.265->H.264 conversion uses a GPU when one is
+# passed in (app/hwaccel.py) and libx264 otherwise. ffmpeg already has NVENC (the driver libraries come from the
+# NVIDIA container toolkit at run time) and V4L2 M2M; VA-API needs the userspace drivers: mesa for AMD, plus
+# Intel's own (iHD: Broadwell and newer, i965: older) on amd64, the only arch Intel GPUs ship on.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg \
+ && apt-get install -y --no-install-recommends ffmpeg mesa-va-drivers \
+      $([ "$TARGETARCH" = amd64 ] && echo intel-media-va-driver i965-va-driver) \
  && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 1000 sentinel \
  && useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin sentinel \
@@ -31,6 +36,7 @@ COPY web/ web/
 COPY --from=go2rtc /go2rtc bin/go2rtc
 
 ENV SENTINEL_DATA=/data \
+    NVIDIA_DRIVER_CAPABILITIES=compute,video,utility \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 USER sentinel

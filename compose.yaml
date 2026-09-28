@@ -14,6 +14,8 @@ services:
       SENTINEL_HOST: ${SENTINEL_HOST:-0.0.0.0}
       SENTINEL_PORT: ${SENTINEL_PORT:-8007}
       TZ: ${TZ:-UTC}
+      # H.265 -> H.264 encoder: auto picks a working GPU (see ./run.sh, which passes the GPU in), else the CPU.
+      SENTINEL_HWACCEL: ${SENTINEL_HWACCEL:-auto}
     volumes:
       # Must be owned by UID 1000 before first start: mkdir -p data && sudo chown -R 1000:1000 data
       - ${SENTINEL_DATA_DIR:-./data}:/data

@@ -239,10 +239,35 @@ The frontend is plain JavaScript with no build step. Natively a UI change just n
 backend (Python) change needs `./run.sh --native restart`; in Docker both need `./run.sh update` (the code is
 baked into the image).
 
+### GPU acceleration
+
+With the default "convert H.265 on the server" setting, every camera's main stream is re-encoded to H.264
+live, which is the heaviest thing the server does. At startup it picks the H.264 encoder by running a short
+test encode on each candidate, and uses the first one that works:
+
+- **macOS:** VideoToolbox.
+- **Linux:** NVIDIA (NVENC), then Intel/AMD (VA-API, via `/dev/dri`), then V4L2 M2M (e.g. Raspberry Pi),
+  and the CPU (libx264) when none works.
+
+Only encoding moves to the GPU; decoding stays on the CPU on purpose (a hardware H.265 decoder has already
+choked on this DVR's stream once). `./run.sh status` and `/api/status` show the choice (`encoder:` /
+`"hwaccel"`), and the server log says which one it picked at startup. Force one with
+`SENTINEL_HWACCEL=nvenc|vaapi|v4l2m2m|videotoolbox|cpu`; if the forced one fails its test encode, it falls
+back to the CPU and logs why.
+
+In Docker, `./run.sh` passes the host's GPU into the container on Linux by itself: `/dev/dri` (with the
+render node's group, so the container user can open it) and, when the
+[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+is installed, the NVIDIA GPU. It writes that to `compose.gpu.yaml` (git-ignored); with plain
+`docker compose`, add `-f compose.gpu.yaml` after `./run.sh setup` has generated it. `SENTINEL_GPU=off`
+skips the passthrough. Docker Desktop (macOS) can't pass a GPU through, so there it's always the CPU; run
+natively to get VideoToolbox. Natively on Linux, your user needs to be in the render node's group (usually
+`render`), which `./run.sh --native setup` warns about.
+
 ### Run on a Linux VM with Docker
 
 Tested target: Ubuntu on amd64 with Docker Engine and the Compose plugin. The image is multi-arch
-(amd64/arm64) and bundles Python, ffmpeg and go2rtc. The [AI frame enhancer](#ai-frame-enhancer) is not
+(amd64/arm64) and bundles Python, ffmpeg, go2rtc and the VA-API drivers (see *GPU acceleration*). The [AI frame enhancer](#ai-frame-enhancer) is not
 included. The VM must be able to reach the recorder's IP directly (same LAN or routed).
 
 ```sh
@@ -270,7 +295,8 @@ from your computer, `ssh -N -L 8007:127.0.0.1:8007 <vm>`, and open `http://local
 - **Logs:** `./run.sh logs` (server), `data/go2rtc.log` (go2rtc).
 - **Update:** `./run.sh update`. **Stop:** `./run.sh stop`. Plain `docker compose` works too; `run.sh`
   only wraps it.
-- **Tests:** `tools/test_docker_image.sh` and `tools/test_docker_compose.sh`.
+- **Tests:** `tools/test_docker_image.sh`, `tools/test_docker_compose.sh`, and
+  `.venv/bin/python3 tools/test_hwaccel.py` (encoder selection, no GPU needed).
 
 **Reaching it from the internet:** there is still no login, so never publish port 8007 directly. Put it
 behind a reverse proxy or tunnel that **authenticates every request** (for example Cloudflare Access,
