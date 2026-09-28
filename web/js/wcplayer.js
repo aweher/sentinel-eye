@@ -20,6 +20,16 @@ const wsUrl = (channel, startIso, speed) => {
 const BUFFER_CAP = 450; // ~30s at ~15fps — generous for stepping, bounded so memory doesn't grow unbounded
 const clampInt = (v, a, b) => Math.min(b, Math.max(a, v));
 
+// Why WebCodecs is missing, for the user. Browsers only expose VideoDecoder in a secure context (HTTPS or
+// localhost), so plain http://<lan-ip> hides it even in a current Chrome/Edge/Safari.
+export function unsupportedReason() {
+  if (!window.isSecureContext) {
+    return `Playback needs HTTPS or localhost — the browser disables WebCodecs on plain http://${location.host}. ` +
+      'Open it through an HTTPS proxy/tunnel, or an SSH tunnel to http://localhost.';
+  }
+  return 'This browser lacks WebCodecs — Chrome, Edge or Safari 16.4+ is needed.';
+}
+
 export class WCPlayer {
   /** @param canvas target <canvas> @param opts {onFrame(absTime), onState(state), onError(msg)} */
   constructor(canvas, opts = {}) {

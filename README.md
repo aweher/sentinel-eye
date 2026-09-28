@@ -255,6 +255,11 @@ docker compose up -d --build
 Then open `http://<vm-ip>:8007` and enter the recorder in **Settings**. The container uses host
 networking, so on your LAN/VPN live view gets WebRTC exactly like a native install.
 
+**Playback needs HTTPS or localhost.** Browsers only enable WebCodecs, which Playback, event previews and
+instant replay decode with, on a secure origin. On plain `http://<vm-ip>:8007` live view works, but
+recordings don't. Either put it behind HTTPS (see *Reaching it from the internet* below), or use an SSH tunnel
+from your computer, `ssh -N -L 8007:127.0.0.1:8007 <vm>`, and open `http://localhost:8007`.
+
 - **Seeding from `.env` instead:** uncomment the `./.env:/app/.env:ro` line in `compose.yaml` before the
   first start. It is read only when `data/settings.json` doesn't exist yet, so remove the line afterwards.
 - **Moving an existing install:** stop the old one, copy its whole `data/` directory to the VM, and

@@ -3,7 +3,7 @@
 // right panel = calendar/time jump, bottom = timeline for the primary (first-picked) camera.
 import { Timeline } from './timeline.js';
 import { bookmarkDialog, esc, icon, toast, openPopover } from './ui.js';
-import { WCPlayer } from './wcplayer.js';
+import { WCPlayer, unsupportedReason } from './wcplayer.js';
 import { partsFromEpoch, fetchTzOffset } from './dvrtime.js';
 import { DateTimePicker } from './datepicker.js';
 import { api } from './api.js';
@@ -170,7 +170,7 @@ export class PlaybackView {
     this.panesEl = this.root.querySelector('.pb-panes');
 
     if (!('VideoDecoder' in window)) {
-      this.stage.innerHTML = `<div class="pb-veil" style="position:static;height:100%"><div class="msg"><b>This browser can't play DVR recordings.</b><br>Chrome, Edge or Safari 16.4+ is needed (WebCodecs).</div></div>`;
+      this.stage.innerHTML = `<div class="pb-veil" style="position:static;height:100%"><div class="msg"><b>Can't play DVR recordings here.</b><br>${esc(unsupportedReason())}</div></div>`;
       return;
     }
 

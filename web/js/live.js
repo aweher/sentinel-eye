@@ -2,7 +2,7 @@
 import { LAYOUTS, layoutIds, layoutIcon, slotsOf } from './layouts.js';
 import { Tile } from './tile.js';
 import { bookmarkDialog, esc, icon, toast, openPopover } from './ui.js';
-import { WCPlayer } from './wcplayer.js';
+import { WCPlayer, unsupportedReason } from './wcplayer.js';
 import { api } from './api.js';
 import { enhancePanelHTML, wireEnhancePanel, summarizeEnhParams } from './enhancePanel.js';
 
@@ -679,7 +679,7 @@ export class LiveView {
       onState: (s) => { pill.textContent = s === 'playing' ? 'replaying' : s === 'queued' ? 'waiting for a recorder session…' : s; },
       onError: (msg) => { pill.textContent = 'error'; toast(`Instant replay: ${msg}`, 'bad', 6000); },
     });
-    if (!player.supported) { toast('This browser does not support instant replay (WebCodecs unavailable).', 'bad'); r.remove(); return; }
+    if (!player.supported) { toast(`Instant replay unavailable: ${unsupportedReason()}`, 'bad', 8000); r.remove(); return; }
     const startIso = new Date(Date.now() - seconds * 1000).toISOString();
     player.connect(cam.id, startIso, '1');
     this.replay = { el: r, player, cam };
