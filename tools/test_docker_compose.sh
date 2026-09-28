@@ -20,6 +20,9 @@ for port in 18007 1984 8554 8555; do
   if (exec 3<>/dev/tcp/127.0.0.1/$port) 2>/dev/null; then fail "port $port is in use (stop ./run.sh first)"; fi
 done
 
+# Engine 25+ only healthcheck keys make compose reject the file on older distro Docker (e.g. Ubuntu docker.io).
+! grep -E "^\s*start_interval:" compose.yaml >/dev/null || fail "compose.yaml uses start_interval (needs Docker Engine 25+)"
+
 docker compose build
 
 # fresh data dir owned by UID 1000, optionally seeded with a settings.json
@@ -76,7 +79,7 @@ if [ "$(uname)" = Linux ]; then
   prep_data 0:0 ""
   docker compose up -d
   sleep 5
-  docker compose logs sentinel-eye | grep "chown 1000:1000 data" >/dev/null || fail "no chown hint in logs"
+  docker compose logs sentinel-eye | grep "sudo chown -R 1000:1000 data" >/dev/null || fail "no chown -R hint in logs"
   docker compose down -t 15
 else
   echo "(skipped: bind-mount ownership isn't enforced by Docker Desktop on $(uname))"

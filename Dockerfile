@@ -35,6 +35,13 @@ ENV SENTINEL_DATA=/data \
     PYTHONDONTWRITEBYTECODE=1
 USER sentinel
 EXPOSE 8007
-# Fail fast with a fix-it message if the bind-mounted data dir is owned by someone else (usually root,
-# when Docker created ./data itself), instead of crash-looping on a PermissionError.
-CMD ["sh", "-c", "[ -w /data ] || { echo \"sentinel-eye: /data is not writable by UID $(id -u). On the host run: sudo chown 1000:1000 data\" >&2; exit 1; }; exec uvicorn --app-dir app server:app --host \"${SENTINEL_HOST:-0.0.0.0}\" --port \"${SENTINEL_PORT:-8007}\""]
+# Fail fast with a fix-it message if anything in the bind-mounted data dir isn't readable and writable by
+# us (usually root-owned: Docker created ./data itself, or data/ was copied with sudo), instead of
+# crash-looping on a PermissionError. Access, not ownership: Docker Desktop's bind mounts report other
+# owners yet allow writes. find's own "Permission denied" output counts as a finding too.
+CMD bad=$(find /data \( ! -readable -o ! -writable \) -print -quit 2>&1); \
+    if [ -n "$bad" ]; then \
+      echo "sentinel-eye: ${bad} is not writable by UID $(id -u). On the host run: sudo chown -R 1000:1000 data" >&2; \
+      exit 1; \
+    fi; \
+    exec uvicorn --app-dir app server:app --host "${SENTINEL_HOST:-0.0.0.0}" --port "${SENTINEL_PORT:-8007}"

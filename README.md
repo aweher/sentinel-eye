@@ -248,7 +248,7 @@ included. The VM must be able to reach the recorder's IP directly (same LAN or r
 
 ```sh
 git clone https://github.com/aweher/sentinel-eye.git && cd sentinel-eye
-mkdir -p data && sudo chown 1000:1000 data     # the container runs as UID 1000
+mkdir -p data && sudo chown -R 1000:1000 data  # the container runs as UID 1000
 docker compose up -d --build
 ```
 
